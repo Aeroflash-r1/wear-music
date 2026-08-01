@@ -23,7 +23,7 @@ ENV PATH="${PATH}:${JAVA_HOME}/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${AN
 RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
     chown -R vscode:vscode /home/vscode/android-sdk
 
-# Switch to non-root vscode user to fetch Android SDK components safely
+# Switch to non-root vscode user to download SDKs safely
 USER vscode
 
 # 4. Install Android Command Line Tools
@@ -34,13 +34,15 @@ RUN wget -q https://dl.google.com/android/repository/commandlinetools-linux-1107
     mv /tmp/cmdline-tools-extracted/cmdline-tools/* ${ANDROID_HOME}/cmdline-tools/latest/ && \
     rm -rf /tmp/cmdline-tools*
 
-# 5. Accept licenses & pre-install Wear OS 5+ SDK platforms (API 34 & 35)
+# 5. Pre-install Wear OS 5 (API 34/35) AND Wear OS 6 (API 36) Platforms & Build Tools
 RUN yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true && \
     ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
         "platform-tools" \
         "platforms;android-34" \
         "platforms;android-35" \
+        "platforms;android-36" \
         "build-tools;34.0.0" \
-        "build-tools;35.0.0"
+        "build-tools;35.0.0" \
+        "build-tools;36.0.0"
 
 USER root
