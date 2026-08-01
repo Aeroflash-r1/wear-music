@@ -1,0 +1,31 @@
+{
+  "name": "Wear OS 5+ Dev Environment (No Emulator)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "java.home": "/usr/lib/jvm/java-17-openjdk-amd64",
+        "android.sdk": "/home/vscode/android-sdk"
+      },
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "mathiasfrohlich.Kotlin",
+        "fwcd.kotlin"
+      ]
+    }
+  },
+  "containerEnv": {
+    "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+    "ANDROID_HOME": "/home/vscode/android-sdk",
+    "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",
+    "GRADLE_OPTS": "-Dorg.gradle.jvmargs=\"-Xmx7g -XX:MaxMetaspaceSize=1g -XX:+UseG1GC\""
+  },
+  "postCreateCommand": "chmod +x gradlew || true",
+  "remoteUser": "vscode",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb"
+  }
+}
