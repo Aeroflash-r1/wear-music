@@ -6,7 +6,6 @@ import com.example.data.repository.SettingsRepositoryImpl
 import com.example.data.repository.TrackRepositoryImpl
 import com.example.domain.repository.DownloadsRepository
 import com.example.domain.repository.PlaybackRepository
-import com.example.domain.repository.PlayerRepository
 import com.example.domain.repository.SettingsRepository
 import com.example.domain.repository.TrackRepository
 import dagger.Binds
@@ -22,10 +21,6 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTrackRepository(impl: TrackRepositoryImpl): TrackRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindPlayerRepository(impl: Media3PlaybackRepositoryImpl): PlayerRepository
 
     @Binds
     @Singleton

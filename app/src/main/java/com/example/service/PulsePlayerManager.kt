@@ -20,9 +20,10 @@ import com.example.data.database.dao.TrackDao
 import com.example.data.database.entity.HistoryEntity
 import com.example.data.database.entity.QueueEntity
 import com.example.domain.model.BackendResult
+import com.example.domain.model.PlayerUiState
 import com.example.domain.model.Track
 import com.example.domain.repository.BackendRepository
-import com.example.ui.screens.player.PlayerUiState
+import com.example.utils.DurationParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -363,7 +364,7 @@ class PulsePlayerManager @Inject constructor(
         _uiState.value = _uiState.value.copy(
             title = track.title,
             artist = track.artist,
-            duration = parseDurationToMs(track.duration),
+            duration = DurationParser.toMillis(track.duration),
             currentTrackId = track.id,
             isPlaying = true,
             buffering = true,
@@ -433,16 +434,6 @@ class PulsePlayerManager @Inject constructor(
                 queueDao.insertQueueItems(entities)
             } catch (_: Exception) {}
         }
-    }
-
-    private fun parseDurationToMs(durationStr: String): Long {
-        val parts = durationStr.split(":")
-        if (parts.size == 2) {
-            val min = parts[0].toLongOrNull() ?: 0L
-            val sec = parts[1].toLongOrNull() ?: 0L
-            return (min * 60 + sec) * 1000L
-        }
-        return 240000L
     }
 
     private fun startPositionUpdates() {

@@ -33,7 +33,7 @@ object DatabaseModule {
             PulseDatabase::class.java,
             "pulse_db"
         )
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
 

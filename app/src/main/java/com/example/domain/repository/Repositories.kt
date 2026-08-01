@@ -2,9 +2,8 @@ package com.example.domain.repository
 
 import com.example.domain.model.DownloadedTrack
 import com.example.domain.model.SearchResult
+import com.example.domain.model.SettingsUiState
 import com.example.domain.model.Track
-import com.example.ui.screens.player.PlayerUiState
-import com.example.ui.screens.settings.SettingsUiState
 import kotlinx.coroutines.flow.Flow
 
 interface TrackRepository {
@@ -13,15 +12,6 @@ interface TrackRepository {
     fun getRecentlyPlayed(): Flow<List<Track>>
     fun getRecentSearches(): Flow<List<String>>
     suspend fun search(query: String): List<SearchResult>
-}
-
-interface PlayerRepository {
-    val playerUiState: Flow<PlayerUiState>
-    fun togglePlayPause()
-    fun nextTrack()
-    fun previousTrack()
-    fun toggleShuffle()
-    fun toggleRepeat()
 }
 
 interface DownloadsRepository {
@@ -42,6 +32,8 @@ interface DownloadsRepository {
 
 interface SettingsRepository {
     val settingsState: Flow<SettingsUiState>
+    val serverUrl: Flow<String>
+    suspend fun setServerUrl(url: String)
     fun toggleAudioOffload()
     fun toggleGaplessPlayback()
     fun toggleNormalizeVolume()

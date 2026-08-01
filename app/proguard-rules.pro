@@ -47,6 +47,12 @@
 
 -keep class com.squareup.moshi.** { *; }
 -keep @com.squareup.moshi.JsonClass class * { *; }
+# Moshi codegen (KSP) discovers generated adapters by class name at runtime.
+-keep class **JsonAdapter { *; }
+-keepclasseswithmembers class * {
+    @com.squareup.moshi.FromJson <methods>;
+    @com.squareup.moshi.ToJson <methods>;
+}
 
 -keep class retrofit2.** { *; }
 -dontwarn retrofit2.**
@@ -78,7 +84,14 @@
 -keep public class * extends android.app.Activity
 
 # ----------------------------------------------------------------------
-# 9. Generic R8 / Proguard optimizations
+# 9. Firebase / Google (declared but unused at runtime; strip safely)
+# ----------------------------------------------------------------------
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+-dontwarn com.google.mlkit.**
+
+# ----------------------------------------------------------------------
+# 10. Generic R8 / Proguard optimizations
 # ----------------------------------------------------------------------
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
 -allowaccessmodification

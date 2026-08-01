@@ -17,6 +17,7 @@ import com.example.domain.repository.LibraryRepository
 import com.example.domain.repository.PlaylistRepository
 import com.example.domain.repository.RecommendationRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,10 +31,6 @@ class RecommendationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getTrending(): BackendResult<List<SearchResultItem>> {
-        return backendRepository.getTrending()
-    }
-
-    override suspend fun getQuickMixes(): BackendResult<List<SearchResultItem>> {
         return backendRepository.getTrending()
     }
 }
@@ -71,16 +68,19 @@ class LibraryRepositoryImpl @Inject constructor(
     private val trackDao: TrackDao
 ) : LibraryRepository {
 
-    override fun getFavoriteTracks(): Flow<List<Track>> {
-        return favoriteDao.getFavoritesByType("song").map { favorites ->
-            favorites.map { fav ->
-                Track(
-                    id = fav.trackId,
-                    title = fav.title.ifEmpty { "Track ${fav.trackId}" },
-                    artist = fav.subtitle.ifEmpty { "Artist" },
-                    duration = "3:30"
-                )
-            }
+    override fun getFavoriteTracks(): Flow<List<Track>> = combine(
+        favoriteDao.getFavoritesByType("song"),
+        trackDao.getAllTracks()
+    ) { favorites, tracks ->
+        val trackMap = tracks.associateBy { it.id }
+        favorites.map { fav ->
+            val t = trackMap[fav.trackId]
+            Track(
+                id = fav.trackId,
+                title = t?.title ?: fav.title.ifEmpty { "Track ${fav.trackId}" },
+                artist = t?.artist ?: fav.subtitle.ifEmpty { "Artist" },
+                duration = t?.duration ?: fav.duration
+            )
         }
     }
 
@@ -133,7 +133,8 @@ class LibraryRepositoryImpl @Inject constructor(
                     trackId = track.id,
                     type = "song",
                     title = track.title,
-                    subtitle = track.artist
+                    subtitle = track.artist,
+                    duration = track.duration
                 )
             )
         }

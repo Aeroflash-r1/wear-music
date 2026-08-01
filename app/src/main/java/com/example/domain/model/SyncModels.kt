@@ -10,7 +10,7 @@ enum class SyncStatus {
 data class SyncUiState(
     val lastSyncTimeMs: Long = 0L,
     val status: SyncStatus = SyncStatus.IDLE,
-    val activeBackend: String = "Piped (Primary)",
+    val activeBackend: String = "Not configured",
     val networkState: NetworkState = NetworkState.CONNECTED_WIFI,
     val isOffline: Boolean = false,
     val pendingDownloadsCount: Int = 0,

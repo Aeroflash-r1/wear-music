@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +48,7 @@ import com.example.ui.components.PulseScreenScaffold
 import com.example.ui.components.PulseSecondaryButton
 import com.example.ui.components.PulseSectionHeader
 import com.example.ui.components.pulseRotaryScroll
+import com.example.ui.screens.search.PulseSearchInput
 import com.example.ui.theme.PulsePadding
 import com.example.ui.theme.PulseSpacing
 
@@ -80,7 +84,11 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncUiState.collectAsState()
+    val connectionTest by viewModel.connectionTest.collectAsState()
     val listState = rememberScalingLazyListState()
+
+    var editingServerUrl by remember { mutableStateOf(false) }
+    var serverUrlDraft by remember { mutableStateOf("") }
 
     val lastSyncStr = if (syncState.lastSyncTimeMs > 0) {
         val diffSec = (System.currentTimeMillis() - syncState.lastSyncTimeMs) / 1000
@@ -275,24 +283,28 @@ fun SettingsScreen(
             item { PulseSectionHeader("Backend") }
             item {
                 PulseListItem(
-                    label = "Backend Status",
-                    secondaryLabel = uiState.backendStatus,
+                    label = "Server URL",
+                    secondaryLabel = uiState.serverUrl.ifBlank { "Not configured" },
                     icon = Icons.Default.Api,
-                    onClick = { }
-                )
-            }
-            item {
-                PulseListItem(
-                    label = "Backend URL",
-                    secondaryLabel = uiState.backendUrl,
-                    icon = Icons.Default.NetworkCheck,
-                    onClick = { }
+                    onClick = {
+                        serverUrlDraft = uiState.serverUrl
+                        editingServerUrl = true
+                    }
                 )
             }
             item {
                 PulseListItem(
                     label = "Connection Test",
+                    secondaryLabel = connectionTest ?: "Tap to test",
                     icon = Icons.Default.CheckCircle,
+                    onClick = { viewModel.testConnection() }
+                )
+            }
+            item {
+                PulseListItem(
+                    label = "Backend Status",
+                    secondaryLabel = if (syncState.isOffline) "Offline" else if (uiState.serverUrl.isBlank()) "Not configured" else "Connected",
+                    icon = Icons.Default.Api,
                     onClick = { }
                 )
             }
@@ -374,6 +386,48 @@ fun SettingsScreen(
                         icon = Icons.Default.Settings,
                         onClick = { }
                     )
+                }
+            }
+        }
+
+        if (editingServerUrl) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                val dialogListState = rememberScalingLazyListState()
+                ScalingLazyColumn(
+                    state = dialogListState,
+                    modifier = Modifier.fillMaxSize().pulseRotaryScroll(dialogListState),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    contentPadding = PulsePadding.ScreenContent,
+                    verticalArrangement = Arrangement.spacedBy(PulseSpacing.sm)
+                ) {
+                    item { PulseSectionHeader(title = "Server URL") }
+                    item {
+                        PulseSearchInput(
+                            query = serverUrlDraft,
+                            onQueryChanged = { serverUrlDraft = it },
+                            onClear = { serverUrlDraft = "" }
+                        )
+                    }
+                    item {
+                        PulseListItem(
+                            label = "Save",
+                            icon = Icons.Default.Check,
+                            onClick = {
+                                viewModel.setServerUrl(serverUrlDraft)
+                                editingServerUrl = false
+                            }
+                        )
+                    }
+                    item {
+                        PulseSecondaryButton(
+                            label = "Cancel",
+                            onClick = { editingServerUrl = false }
+                        )
+                    }
                 }
             }
         }

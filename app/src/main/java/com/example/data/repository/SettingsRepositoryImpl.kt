@@ -2,11 +2,16 @@ package com.example.data.repository
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
+import java.io.File
+import java.util.Locale
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.data.remote.ServerConfig
+import com.example.domain.model.SettingsUiState
+import com.example.domain.repository.DownloadsRepository
 import com.example.domain.repository.SettingsRepository
-import com.example.ui.screens.settings.SettingsUiState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +27,7 @@ import javax.inject.Singleton
 private val Context.settingsDataStore by preferencesDataStore(name = "pulse_settings")
 
 private object PrefKeys {
+    val SERVER_URL = stringPreferencesKey("server_url")
     val AUDIO_OFFLOAD = booleanPreferencesKey("audio_offload")
     val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
     val NORMALIZE_VOLUME = booleanPreferencesKey("normalize_volume")
@@ -40,21 +46,48 @@ private object PrefKeys {
  */
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val downloadsRepository: DownloadsRepository,
+    private val serverConfig: ServerConfig
 ) : SettingsRepository {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    /** Real on-disk size of the installed APK, computed once at startup. */
+    private val appSize: String = runCatching {
+        val info = context.packageManager.getApplicationInfo(context.packageName, 0)
+        val bytes = File(info.sourceDir).length()
+        if (bytes > 0) String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0)) else "—"
+    }.getOrDefault("—")
+
     private data class TransientState(
         val devClickCount: Int = 0,
-        val showClearCacheDialog: Boolean = false,
-        val currentCacheSize: String = "0 MB"
+        val showClearCacheDialog: Boolean = false
     )
 
     private val _transientState = MutableStateFlow(TransientState())
 
+    override val serverUrl: Flow<String> = context.settingsDataStore.data.map { prefs ->
+        (prefs[PrefKeys.SERVER_URL] ?: "").trim().trimEnd('/')
+    }
+
+    init {
+        // Push the persisted server URL into ServerConfig so the Retrofit interceptor
+        // can rewrite requests before the user ever opens Settings.
+        scope.launch {
+            val url = context.settingsDataStore.data.first()[PrefKeys.SERVER_URL] ?: ""
+            serverConfig.update(url)
+        }
+    }
+
+    override suspend fun setServerUrl(url: String) {
+        context.settingsDataStore.edit { prefs -> prefs[PrefKeys.SERVER_URL] = url }
+        serverConfig.update(url)
+    }
+
     private val persistedFlow: Flow<SettingsUiState> = context.settingsDataStore.data.map { prefs ->
         SettingsUiState(
+            serverUrl = prefs[PrefKeys.SERVER_URL] ?: "",
             audioOffload = prefs[PrefKeys.AUDIO_OFFLOAD] ?: true,
             gaplessPlayback = prefs[PrefKeys.GAPLESS_PLAYBACK] ?: true,
             normalizeVolume = prefs[PrefKeys.NORMALIZE_VOLUME] ?: false,
@@ -62,18 +95,20 @@ class SettingsRepositoryImpl @Inject constructor(
             downloadOverWifi = prefs[PrefKeys.DOWNLOAD_OVER_WIFI] ?: true,
             dynamicColor = prefs[PrefKeys.DYNAMIC_COLOR] ?: true,
             amoledDarkTheme = prefs[PrefKeys.AMOLED_DARK_THEME] ?: true,
-            developerOptionsUnlocked = prefs[PrefKeys.DEV_OPTIONS_UNLOCKED] ?: false
+            developerOptionsUnlocked = prefs[PrefKeys.DEV_OPTIONS_UNLOCKED] ?: false,
+            appSize = appSize
         )
     }
 
     override val settingsState: Flow<SettingsUiState> = combine(
         persistedFlow,
+        downloadsRepository.getDownloads(),
         _transientState
-    ) { persisted, transient ->
+    ) { persisted, _, transient ->
         persisted.copy(
             devClickCount = transient.devClickCount,
             showClearCacheDialog = transient.showClearCacheDialog,
-            currentCacheSize = transient.currentCacheSize
+            currentCacheSize = downloadsRepository.getTotalStorageUsed()
         )
     }
 
@@ -115,9 +150,9 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override fun clearCache() {
-        _transientState.value = _transientState.value.copy(
-            currentCacheSize = "0 MB",
-            showClearCacheDialog = false
-        )
+        scope.launch {
+            downloadsRepository.clearCache()
+            _transientState.value = _transientState.value.copy(showClearCacheDialog = false)
+        }
     }
 }

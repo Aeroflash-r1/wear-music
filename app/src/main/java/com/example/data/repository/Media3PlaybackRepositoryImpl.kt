@@ -1,11 +1,10 @@
 package com.example.data.repository
 
 import com.example.domain.model.BackendResult
+import com.example.domain.model.PlayerUiState
 import com.example.domain.repository.BackendRepository
 import com.example.domain.repository.PlaybackRepository
-import com.example.domain.repository.PlayerRepository
 import com.example.service.PulsePlayerManager
-import com.example.ui.screens.player.PlayerUiState
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,7 +13,7 @@ import javax.inject.Singleton
 class Media3PlaybackRepositoryImpl @Inject constructor(
     private val playerManager: PulsePlayerManager,
     private val backendRepository: BackendRepository
-) : PlaybackRepository, PlayerRepository {
+) : PlaybackRepository {
 
     override val playerUiState: StateFlow<PlayerUiState> = playerManager.uiState
 

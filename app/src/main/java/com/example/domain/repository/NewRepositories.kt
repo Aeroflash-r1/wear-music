@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.Flow
 interface RecommendationRepository {
     suspend fun getRecommendations(trackId: String? = null): BackendResult<List<SearchResultItem>>
     suspend fun getTrending(): BackendResult<List<SearchResultItem>>
-    suspend fun getQuickMixes(): BackendResult<List<SearchResultItem>>
 }
 
 interface ArtistRepository {

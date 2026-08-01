@@ -1,5 +1,6 @@
 package com.example.data.sync
 
+import com.example.data.remote.ServerConfig
 import com.example.domain.model.DownloadStatus
 import com.example.domain.model.NetworkState
 import com.example.domain.model.SyncStatus
@@ -8,13 +9,10 @@ import com.example.domain.repository.BackendRepository
 import com.example.domain.repository.DownloadsRepository
 import com.example.domain.repository.OfflineRepository
 import com.example.domain.repository.SyncRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,10 +21,9 @@ class SyncRepositoryImpl @Inject constructor(
     private val syncManager: SyncManager,
     private val offlineRepository: OfflineRepository,
     private val downloadsRepository: DownloadsRepository,
-    private val backendRepository: BackendRepository
+    private val backendRepository: BackendRepository,
+    private val serverConfig: ServerConfig
 ) : SyncRepository {
-
-    private val scope = CoroutineScope(Dispatchers.IO)
 
     private val _lastSyncTime = MutableStateFlow(System.currentTimeMillis())
     private val _syncStatus = MutableStateFlow(SyncStatus.IDLE)
@@ -68,7 +65,7 @@ class SyncRepositoryImpl @Inject constructor(
             SyncUiState(
                 lastSyncTimeMs = lastSync,
                 status = status,
-                activeBackend = "Piped (Primary)",
+                activeBackend = serverConfig.baseUrl.ifBlank { "Not configured" },
                 networkState = netState,
                 isOffline = isOffline,
                 pendingDownloadsCount = pendingCount,
@@ -124,9 +121,6 @@ class SyncRepositoryImpl @Inject constructor(
     }
 
     override suspend fun retryFailedDownloads() {
-        val currentDownloads = downloadsRepository.observeDownloadProgress()
-        scope.launch {
-            downloadsRepository.getDownloads()
-        }
+        downloadsRepository.retryFailedDownloads()
     }
 }

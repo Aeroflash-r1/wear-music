@@ -1,29 +1,11 @@
 package com.example.ui.screens.player
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import com.example.domain.model.PlayerUiState
 import com.example.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
-
-data class PlayerUiState(
-    val title: String = "",
-    val artist: String = "",
-    val duration: Long = 0L,
-    val currentPosition: Long = 0L,
-    val isPlaying: Boolean = false,
-    val shuffleEnabled: Boolean = false,
-    val repeatMode: Int = 0, // 0: None, 1: All, 2: One
-    val buffering: Boolean = false,
-    val playbackSpeed: Float = 1.0f,
-    val sleepTimerRemainingMs: Long = 0L,
-    val currentTrackId: String = "",
-    val queue: List<com.example.domain.model.Track> = emptyList(),
-    val queueIndex: Int = 0
-)
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(

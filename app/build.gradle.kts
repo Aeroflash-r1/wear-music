@@ -66,6 +66,9 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
   compilerOptions {
     jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     freeCompilerArgs.add("-Xjvm-default=all")
+    // Pin multi-target annotations (e.g. @ApplicationContext) to constructor
+    // parameters, silencing the Kotlin 2.2 "will also be applied to field" warning.
+    freeCompilerArgs.add("-Xannotation-default-target=param")
   }
 }
 

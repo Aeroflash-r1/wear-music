@@ -6,6 +6,7 @@ import com.example.domain.model.AlbumDetails
 import com.example.domain.model.ArtistDetails
 import com.example.domain.model.BackendResult
 import com.example.domain.model.DownloadedTrack
+import com.example.domain.model.PlayerUiState
 import com.example.domain.model.SearchResultItem
 import com.example.domain.model.Track
 import com.example.domain.repository.BackendRepository
@@ -15,7 +16,6 @@ import com.example.domain.repository.OfflineRepository
 import com.example.domain.repository.PlaybackRepository
 import com.example.domain.repository.RecommendationRepository
 import com.example.domain.repository.TrackRepository
-import com.example.ui.screens.player.PlayerUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +28,6 @@ import javax.inject.Inject
 data class HomeFeedState(
     val recommended: List<SearchResultItem> = emptyList(),
     val trending: List<SearchResultItem> = emptyList(),
-    val quickMixes: List<SearchResultItem> = emptyList(),
     val popularAlbums: List<AlbumDetails> = emptyList(),
     val popularArtists: List<ArtistDetails> = emptyList()
 )
@@ -86,12 +85,6 @@ class HomeViewModel @Inject constructor(
                     if (seedArtist != null) {
                         loadPopularAlbumsAndArtists(seedArtist)
                     }
-                }
-            }
-            launch {
-                val mixes = recommendationRepository.getQuickMixes()
-                if (mixes is BackendResult.Success) {
-                    _homeFeed.value = _homeFeed.value.copy(quickMixes = mixes.data)
                 }
             }
         }

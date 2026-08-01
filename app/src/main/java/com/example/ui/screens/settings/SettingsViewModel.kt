@@ -2,52 +2,28 @@ package com.example.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.domain.model.BackendResult
+import com.example.domain.model.SettingsUiState
 import com.example.domain.model.SyncUiState
+import com.example.domain.repository.BackendRepository
 import com.example.domain.repository.OfflineRepository
 import com.example.domain.repository.SettingsRepository
 import com.example.domain.repository.SyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-data class SettingsUiState(
-    val audioQuality: String = "High",
-    val audioOffload: Boolean = true,
-    val gaplessPlayback: Boolean = true,
-    val normalizeVolume: Boolean = false,
-    
-    val downloadQuality: String = "High",
-    val autoDownload: Boolean = true,
-    val downloadOverWifi: Boolean = true,
-    
-    val currentCacheSize: String = "156 MB",
-    val cacheLimit: String = "1 GB",
-    
-    val backendStatus: String = "Connected",
-    val backendUrl: String = "https://api.pulse.example",
-    
-    val dynamicColor: Boolean = true,
-    val amoledDarkTheme: Boolean = true,
-    val animationSpeed: String = "Normal",
-    
-    val pulseVersion: String = "1.0.0 (42)",
-    val buildType: String = "Release",
-    val appSize: String = "45 MB",
-    
-    val developerOptionsUnlocked: Boolean = false,
-    val devClickCount: Int = 0,
-    
-    val showClearCacheDialog: Boolean = false
-)
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val syncRepository: SyncRepository,
-    private val offlineRepository: OfflineRepository
+    private val offlineRepository: OfflineRepository,
+    private val backendRepository: BackendRepository
 ) : ViewModel() {
 
     val syncUiState: StateFlow<SyncUiState> = syncRepository.getSyncUiState()
@@ -63,6 +39,30 @@ class SettingsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = SettingsUiState()
         )
+
+    val serverUrl: StateFlow<String> = settingsRepository.serverUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    private val _connectionTest = MutableStateFlow<String?>(null)
+    val connectionTest: StateFlow<String?> = _connectionTest.asStateFlow()
+
+    fun setServerUrl(url: String) {
+        _connectionTest.value = null
+        viewModelScope.launch {
+            settingsRepository.setServerUrl(url)
+        }
+    }
+
+    /** Pings the configured server and reports the outcome in the settings UI. */
+    fun testConnection() {
+        _connectionTest.value = "Testing…"
+        viewModelScope.launch {
+            _connectionTest.value = when (backendRepository.getTrending()) {
+                is BackendResult.Success -> "Connected ✓"
+                is BackendResult.Error -> "Failed ✗"
+            }
+        }
+    }
 
     fun triggerSync() {
         viewModelScope.launch {

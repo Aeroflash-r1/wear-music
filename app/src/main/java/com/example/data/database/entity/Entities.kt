@@ -21,6 +21,7 @@ data class FavoriteEntity(
     val type: String = "song", // "song", "album", "artist", "playlist"
     val title: String = "",
     val subtitle: String = "",
+    val duration: String = "",
     val thumbnailUrl: String? = null,
     val addedAt: Long = System.currentTimeMillis()
 )

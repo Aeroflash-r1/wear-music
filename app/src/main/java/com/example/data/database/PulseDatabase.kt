@@ -24,7 +24,7 @@ import com.example.data.database.entity.TrackEntity
         DownloadEntity::class,
         RecentSearchEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class PulseDatabase : RoomDatabase() {

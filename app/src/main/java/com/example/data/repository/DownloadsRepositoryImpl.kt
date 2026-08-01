@@ -21,6 +21,7 @@ import com.example.domain.model.DownloadedTrack
 import com.example.domain.repository.BackendRepository
 import com.example.domain.repository.DownloadsRepository
 import com.example.service.PulseDownloadService
+import com.example.utils.DurationParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -100,7 +102,7 @@ class DownloadsRepositoryImpl @Inject constructor(
         return if (mb > 1024) "%.1f GB".format(mb / 1024.0) else "$mb MB"
     }
 
-    override fun getStorageLimit(): String = "5 GB"
+    override fun getStorageLimit(): String = "500 MB"
 
     override suspend fun enqueueDownload(trackId: String, title: String, artist: String) {
         when (val streamRes = backendRepository.getAudioStream(trackId)) {
@@ -119,13 +121,28 @@ class DownloadsRepositoryImpl @Inject constructor(
                     false
                 )
 
+                // Resolve real metadata (title/artist/album/duration) so the library
+                // entry reflects the actual track instead of placeholder values, and
+                // estimate the file size from the stream bitrate and duration.
+                val details = (backendRepository.getTrack(trackId) as? BackendResult.Success)?.data
+                val realTitle = details?.title ?: title
+                val realArtist = details?.artist ?: artist
+                val realAlbum = details?.album ?: "Downloaded Single"
+                val realDuration = details?.duration ?: "3:45"
+                val durationSec = DurationParser.toSeconds(realDuration)
+                val bitrate = streamRes.data.bitrate
+                val sizeMb = if (durationSec > 0 && bitrate > 0) {
+                    bitrate / 8.0 * durationSec / (1024.0 * 1024.0)
+                } else 0.0
+                val fileSize = if (sizeMb > 0) String.format(Locale.US, "%.1f MB", sizeMb) else "—"
+
                 trackDao.insertTrack(
                     TrackEntity(
                         id = trackId,
-                        title = title,
-                        artist = artist,
-                        album = "Downloaded Single",
-                        duration = "3:45",
+                        title = realTitle,
+                        artist = realArtist,
+                        album = realAlbum,
+                        duration = realDuration,
                         audioQuality = "High Quality (${streamRes.data.bitrate / 1000}kbps)"
                     )
                 )
@@ -135,7 +152,7 @@ class DownloadsRepositoryImpl @Inject constructor(
                         id = trackId,
                         trackId = trackId,
                         filePath = streamRes.data.audioUrl,
-                        fileSize = "12 MB"
+                        fileSize = fileSize
                     )
                 )
             }

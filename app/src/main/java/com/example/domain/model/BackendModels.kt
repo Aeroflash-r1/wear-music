@@ -54,9 +54,6 @@ data class PlaylistDetails(
 )
 
 enum class NetworkState {
-    Online,
-    Offline,
-    Reconnecting,
     CONNECTED_WIFI,
     CONNECTED_CELLULAR,
     DISCONNECTED

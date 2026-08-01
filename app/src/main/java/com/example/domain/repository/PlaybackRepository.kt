@@ -1,6 +1,6 @@
 package com.example.domain.repository
 
-import com.example.ui.screens.player.PlayerUiState
+import com.example.domain.model.PlayerUiState
 import kotlinx.coroutines.flow.StateFlow
 
 interface PlaybackRepository {

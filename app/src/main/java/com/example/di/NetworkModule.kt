@@ -2,8 +2,9 @@ package com.example.di
 
 import android.content.Context
 import com.example.BuildConfig
-import com.example.data.remote.BackendProvider
-import com.example.data.remote.MemoryCache
+import com.example.data.remote.ServerConfig
+import com.example.data.remote.ServerUrlInterceptor
+import com.example.data.remote.api.PulseApi
 import com.example.data.repository.BackendRepositoryImpl
 import com.example.domain.repository.BackendRepository
 import com.squareup.moshi.Moshi
@@ -80,11 +81,37 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideBackendProvider(
+    fun provideServerConfig(): ServerConfig = ServerConfig()
+
+    @Provides
+    @Singleton
+    fun provideServerUrlInterceptor(serverConfig: ServerConfig): ServerUrlInterceptor {
+        return ServerUrlInterceptor(serverConfig)
+    }
+
+    @Provides
+    @Singleton
+    fun providePulseApi(
         okHttpClient: OkHttpClient,
-        moshiConverterFactory: MoshiConverterFactory
-    ): BackendProvider {
-        return BackendProvider(okHttpClient, moshiConverterFactory)
+        moshiConverterFactory: MoshiConverterFactory,
+        serverUrlInterceptor: ServerUrlInterceptor
+    ): PulseApi {
+        // yt-dlp on the server resolves each search result, which can take 10-40s,
+        // so the server-bound client needs a much longer read timeout than the
+        // default 15s client. Connect timeout stays short for fast failure.
+        val serverClient = okHttpClient.newBuilder()
+            .addInterceptor(serverUrlInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
+
+        return Retrofit.Builder()
+            .baseUrl("http://pulse.local/") // placeholder; host rewritten by interceptor
+            .client(serverClient)
+            .addConverterFactory(moshiConverterFactory)
+            .build()
+            .create(PulseApi::class.java)
     }
 }
 
