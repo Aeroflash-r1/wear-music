@@ -1,0 +1,6 @@
+{
+  "name": "Pulse",
+  "description": "A premium personal music streaming application for Wear OS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
