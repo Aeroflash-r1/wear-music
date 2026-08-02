@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.AlbumDetails
 import com.example.domain.model.BackendResult
 import com.example.domain.model.Track
+import com.example.domain.model.userMessage
 import com.example.domain.repository.AlbumRepository
 import com.example.domain.repository.DownloadsRepository
 import com.example.domain.repository.LibraryRepository
@@ -50,7 +51,7 @@ class AlbumViewModel @Inject constructor(
                     _uiState.value = AlbumUiState.Success(res.data, isFav)
                 }
                 is BackendResult.Error -> {
-                    _uiState.value = AlbumUiState.Error(res.error.toString())
+                    _uiState.value = AlbumUiState.Error(res.error.userMessage())
                 }
             }
         }
@@ -73,6 +74,15 @@ class AlbumViewModel @Inject constructor(
         if (tracks.isNotEmpty()) {
             playbackRepository.playQueue(tracks, 0)
         }
+    }
+
+    fun playTrack(trackId: String) {
+        val state = _uiState.value as? AlbumUiState.Success ?: return
+        val track = state.album.tracks.firstOrNull { it.id == trackId } ?: return
+        playbackRepository.playQueue(
+            listOf(Track(track.id, track.title, state.album.artist, track.duration)),
+            0
+        )
     }
 
     fun downloadAlbum() {

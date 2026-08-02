@@ -107,7 +107,7 @@ fun PlaylistScreen(
                                 label = track.title,
                                 secondaryLabel = "${track.artist} • ${track.duration}",
                                 icon = Icons.Default.MusicNote,
-                                onClick = viewModel::playPlaylist
+                                onClick = { viewModel.playTrack(track.id) }
                             )
                         }
                     }

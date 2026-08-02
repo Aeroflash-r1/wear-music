@@ -103,37 +103,64 @@ class TrackRepositoryImplTest {
     }
 
     @Test
-    fun `search falls back to local library when backend fails`() = runTest {
+    fun `search surfaces backend error instead of silently hiding it`() = runTest {
         db.trackDao().insertTrack(
             TrackEntity(
                 id = "t1", title = "Hello World", artist = "Artist",
                 album = "Album", duration = "3:45", audioQuality = "High"
             )
         )
-        db.trackDao().insertTrack(
-            TrackEntity(
-                id = "t2", title = "Goodbye", artist = "Artist",
-                album = "Album", duration = "2:00", audioQuality = "High"
-            )
-        )
 
-        val results = repository.search("hello")
+        val result = repository.search("hello")
 
-        assertEquals(listOf("t1"), results.map { it.id })
+        // Backend failure must reach the UI (so the user knows the server/yt-dlp
+        // failed) rather than being masked as a fake "No results".
+        assertTrue(result is BackendResult.Error)
     }
 
     @Test
     fun `search records the query in recent searches`() = runTest {
-        val results = repository.search("pulse")
+        val result = repository.search("pulse")
 
-        assertTrue(results.isEmpty())
+        assertTrue(result is BackendResult.Error)
         val recent = db.recentSearchDao().getRecentSearches().first()
         assertEquals(listOf("pulse"), recent)
     }
 
+    @Test
+    fun `search passes the filter through to the backend`() = runTest {
+        val backend = FakeBackendRepository().apply {
+            searchResult = BackendResult.Success(
+                listOf(SearchResultItem(id = "s1", title = "Song", artist = "Artist", duration = "3:00", type = "song"))
+            )
+        }
+        repository = TrackRepositoryImpl(
+            trackDao = db.trackDao(),
+            favoriteDao = db.favoriteDao(),
+            historyDao = db.historyDao(),
+            queueDao = db.queueDao(),
+            recentSearchDao = db.recentSearchDao(),
+            backendRepository = backend
+        )
+
+        val result = repository.search("drake", "music_albums")
+
+        assertTrue(result is BackendResult.Success)
+        assertEquals("music_albums", backend.lastFilter)
+        val items = (result as BackendResult.Success).data
+        assertEquals(listOf("s1"), items.map { it.id })
+        assertEquals("song", items[0].type)
+    }
+
     private class FakeBackendRepository : BackendRepository {
-        override suspend fun search(query: String, filter: String?, page: Int): BackendResult<List<SearchResultItem>> =
+        var searchResult: BackendResult<List<SearchResultItem>> =
             BackendResult.Error(BackendError.Network("offline"))
+        var lastFilter: String? = null
+
+        override suspend fun search(query: String, filter: String?, page: Int): BackendResult<List<SearchResultItem>> {
+            lastFilter = filter
+            return searchResult
+        }
 
         override suspend fun getTrack(trackId: String): BackendResult<TrackDetails> =
             BackendResult.Error(BackendError.Network("offline"))

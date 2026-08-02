@@ -17,14 +17,14 @@ class Media3PlaybackRepositoryImpl @Inject constructor(
 
     override val playerUiState: StateFlow<PlayerUiState> = playerManager.uiState
 
-    override suspend fun playTrackStream(trackId: String, title: String, artist: String) {
+    override suspend fun playTrackStream(trackId: String, title: String, artist: String, streamUrl: String?) {
+        if (!streamUrl.isNullOrBlank()) {
+            playerManager.playStream(trackId, streamUrl, title, artist)
+            return
+        }
         when (val res = backendRepository.getAudioStream(trackId)) {
-            is BackendResult.Success -> {
-                playerManager.playStream(res.data.audioUrl, title, artist)
-            }
-            is BackendResult.Error -> {
-                playerManager.play()
-            }
+            is BackendResult.Success -> playerManager.playStream(trackId, res.data.audioUrl, title, artist)
+            is BackendResult.Error -> playerManager.play()
         }
     }
 

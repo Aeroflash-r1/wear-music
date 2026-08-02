@@ -104,7 +104,7 @@ fun AlbumScreen(
                                 label = track.title,
                                 secondaryLabel = track.duration,
                                 icon = Icons.Default.MusicNote,
-                                onClick = viewModel::playAlbum
+                                onClick = { viewModel.playTrack(track.id) }
                             )
                         }
                     }

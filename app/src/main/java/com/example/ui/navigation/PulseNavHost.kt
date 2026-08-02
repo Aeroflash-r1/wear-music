@@ -50,7 +50,9 @@ fun PulseNavHost(
                 com.example.ui.screens.favorites.FavoritesScreen()
             }
             composable(Screen.Downloads.route) {
-                com.example.ui.screens.downloads.DownloadsScreen()
+                com.example.ui.screens.downloads.DownloadsScreen(
+                    onNavigate = { screen -> navController.navigate(screen.route) }
+                )
             }
             composable(Screen.Settings.route) {
                 com.example.ui.screens.settings.SettingsScreen()

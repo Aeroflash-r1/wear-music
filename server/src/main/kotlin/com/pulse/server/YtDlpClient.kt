@@ -1,12 +1,21 @@
 package com.pulse.server
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import java.io.File
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 /**
  * Wraps the yt-dlp binary: builds commands, runs the subprocess with a hard
  * timeout, parses JSON output, and maps it into the server's API models.
+ *
+ * Every yt-dlp call runs on [Dispatchers.IO] so the Ktor event loop is never
+ * blocked — a slow search must not freeze /health or concurrent requests.
+ * Methods return `null` when yt-dlp itself failed (missing binary, timeout,
+ * non-zero exit) so the route layer can return a real 5xx instead of a
+ * misleading "empty results".
  */
 class YtDlpClient(private val config: ServerConfig) {
 
@@ -35,30 +44,55 @@ class YtDlpClient(private val config: ServerConfig) {
 
     // ------------------------------------------------------------------ yt-dlp
 
-    private fun run(vararg args: String): String? {
-        return try {
-            val process = ProcessBuilder(listOf(config.ytDlpBin) + args)
+    /**
+     * Runs yt-dlp with the given args. Returns stdout on success, `null` on any
+     * failure (launch error, timeout, non-zero exit). Runs on Dispatchers.IO so
+     * the caller's dispatcher is never blocked by the subprocess.
+     */
+    private suspend fun run(vararg args: String): String? = withContext(Dispatchers.IO) {
+        val process = try {
+            ProcessBuilder(listOf(config.ytDlpBin) + args)
                 .redirectErrorStream(true)
                 .start()
-            // Read stdout on a worker thread so the waitFor timeout below can actually
-            // fire — a hung yt-dlp must not block the server thread forever.
-            val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {
-                process.inputStream.bufferedReader().readText()
-            }
-            if (!process.waitFor(config.ytDlpTimeoutSeconds, TimeUnit.SECONDS)) {
-                process.destroyForcibly()
-                return null
-            }
-            if (process.exitValue() != 0) return null
-            outputFuture.get(5, TimeUnit.SECONDS)
         } catch (e: Exception) {
+            System.err.println("yt-dlp launch failed: ${e.message}")
             null
+        } ?: return@withContext null
+
+        // Read stdout on a worker thread so the waitFor timeout below can actually
+        // fire — a hung yt-dlp must not block the server thread forever.
+        val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {
+            process.inputStream.bufferedReader().readText()
+        }
+
+        if (!process.waitFor(config.ytDlpTimeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            outputFuture.cancel(true)
+            System.err.println("yt-dlp timed out after ${config.ytDlpTimeoutSeconds}s: ${args.joinToString(" ").take(120)}")
+            null
+        } else if (process.exitValue() != 0) {
+            System.err.println("yt-dlp exited ${process.exitValue()}: ${args.joinToString(" ").take(120)}")
+            null
+        } else {
+            try {
+                // Process exited cleanly — the reader hits EOF quickly, so a
+                // generous timeout only guards against reader deadlock.
+                outputFuture.get(30, TimeUnit.SECONDS)
+            } catch (e: Exception) {
+                System.err.println("yt-dlp output read failed: ${e.message}")
+                null
+            }
         }
     }
 
     private fun parseVideo(raw: String): YtDlpVideo? = runCatching { json.decodeFromString<YtDlpVideo>(raw) }.getOrNull()
 
-    private fun parsePlaylist(raw: String): YtDlpPlaylist? = runCatching { json.decodeFromString<YtDlpPlaylist>(raw) }.getOrNull()
+    private fun parsePlaylist(raw: String): YtDlpPlaylist? = runCatching {
+        json.decodeFromString<YtDlpPlaylist>(raw)
+    }.getOrNull()
+
+    private fun encodeQuery(query: String): String =
+        URLEncoder.encode(query, StandardCharsets.UTF_8).replace("+", "%20")
 
     // ------------------------------------------------------------------ mapping
 
@@ -95,8 +129,12 @@ class YtDlpClient(private val config: ServerConfig) {
 
     // ------------------------------------------------------------------ API ops
 
-    /** Searches YouTube Music-style. `filter` mirrors the app: music_songs, music_albums, channels. */
-    suspend fun search(query: String, filter: String?): List<ApiSearchItem> {
+    /**
+     * Searches YouTube Music-style. `filter` mirrors the app: music_songs,
+     * music_albums, channels. Returns `null` when yt-dlp failed; an empty list
+     * means the search genuinely had no hits.
+     */
+    suspend fun search(query: String, filter: String?): List<ApiSearchItem>? {
         val cacheKey = "$filter::$query"
         searchCache.get(cacheKey)?.let { return it }
 
@@ -106,40 +144,30 @@ class YtDlpClient(private val config: ServerConfig) {
             else -> searchSongs(query)
         }
 
-        if (items.isNotEmpty()) searchCache.put(cacheKey, items)
+        if (items != null && items.isNotEmpty()) searchCache.put(cacheKey, items)
         return items
     }
 
-    private suspend fun searchSongs(query: String): List<ApiSearchItem> {
-        val raw = run("ytsearch10:$query", "--dump-json", "--no-warnings", "--no-playlist")
-        if (raw == null) return emptyList()
-        return raw.lineSequence()
-            .filter { it.isNotBlank() }
-            .mapNotNull { parseVideo(it) }
-            .map { video ->
-                ApiSearchItem(
-                    id = video.id ?: "",
-                    title = video.title ?: "Unknown Title",
-                    artist = video.uploader ?: "Unknown Artist",
-                    duration = formatDuration(video.duration ?: 0L),
-                    thumbnailUrl = video.thumbnail ?: video.thumbnails?.lastOrNull()?.url,
-                    type = "song"
-                )
-            }
-            .toList()
+    private suspend fun searchSongs(query: String): List<ApiSearchItem>? {
+        // --flat-playlist keeps this to a single fast request (like albums/channels);
+        // full --dump-json extraction of 10 videos would take 20-60s on a phone.
+        val raw = run("ytsearch10:$query", "--flat-playlist", "--dump-single-json", "--no-warnings", "--no-playlist")
+            ?: return null
+        val playlist = parsePlaylist(raw) ?: return null
+        return playlist.entries.orEmpty().mapNotNull { it.toSearchItem("song") }
     }
 
-    private suspend fun searchAlbums(query: String): List<ApiSearchItem> {
-        val url = "https://www.youtube.com/results?search_query=${query.replace(' ', '+')}&sp=EgJAAQ%3D%3D"
-        val raw = run(url, "--flat-playlist", "--dump-single-json", "--no-warnings")
-        val playlist = raw?.let { parsePlaylist(it) } ?: return emptyList()
+    private suspend fun searchAlbums(query: String): List<ApiSearchItem>? {
+        val url = "https://www.youtube.com/results?search_query=${encodeQuery(query)}&sp=EgJAAQ%3D%3D"
+        val raw = run(url, "--flat-playlist", "--dump-single-json", "--no-warnings") ?: return null
+        val playlist = parsePlaylist(raw) ?: return null
         return playlist.entries.orEmpty().mapNotNull { it.toSearchItem("album") }
     }
 
-    private suspend fun searchChannels(query: String): List<ApiSearchItem> {
-        val url = "https://www.youtube.com/results?search_query=${query.replace(' ', '+')}&sp=EgIQAg%3D%3D"
-        val raw = run(url, "--flat-playlist", "--dump-single-json", "--no-warnings")
-        val playlist = raw?.let { parsePlaylist(it) } ?: return emptyList()
+    private suspend fun searchChannels(query: String): List<ApiSearchItem>? {
+        val url = "https://www.youtube.com/results?search_query=${encodeQuery(query)}&sp=EgIQAg%3D%3D"
+        val raw = run(url, "--flat-playlist", "--dump-single-json", "--no-warnings") ?: return null
+        val playlist = parsePlaylist(raw) ?: return null
         return playlist.entries.orEmpty().mapNotNull { it.toSearchItem("artist") }
     }
 
@@ -220,19 +248,19 @@ class YtDlpClient(private val config: ServerConfig) {
         return result
     }
 
-    suspend fun getTrending(): List<ApiSearchItem> {
+    suspend fun getTrending(): List<ApiSearchItem>? {
         trendingCache.get("global")?.let { return it }
         val raw = run(
             "https://www.youtube.com/feed/trending",
             "--flat-playlist", "--dump-single-json", "--no-warnings"
-        ) ?: return emptyList()
-        val playlist = parsePlaylist(raw) ?: return emptyList()
+        ) ?: return null
+        val playlist = parsePlaylist(raw) ?: return null
         val items = playlist.entries.orEmpty().mapNotNull { it.toSearchItem("song") }
         if (items.isNotEmpty()) trendingCache.put("global", items)
         return items
     }
 
-    fun health(): ApiHealth = ApiHealth(
+    suspend fun health(): ApiHealth = ApiHealth(
         status = "ok",
         version = "1.0.0",
         ytDlpVersion = run("--version")?.trim(),

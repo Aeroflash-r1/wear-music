@@ -10,10 +10,10 @@ package com.pulse.server
  *   YTDLP_TIMEOUT - seconds to wait for a yt-dlp call before killing it (default 90)
  */
 data class ServerConfig(
-    val port: Int = env("PORT")?.toIntOrNull() ?: 8080,
+    val port: Int = env("PORT")?.toIntOrNull()?.coerceIn(1, 65_535) ?: 8080,
     val host: String = env("HOST") ?: "0.0.0.0",
-    val ytDlpBin: String = env("YTDLP_BIN") ?: "yt-dlp",
-    val ytDlpTimeoutSeconds: Long = env("YTDLP_TIMEOUT")?.toLongOrNull() ?: 90L
+    val ytDlpBin: String = env("YTDLP_BIN")?.trim()?.takeIf { it.isNotEmpty() } ?: "yt-dlp",
+    val ytDlpTimeoutSeconds: Long = env("YTDLP_TIMEOUT")?.toLongOrNull()?.coerceIn(1L, 600L) ?: 90L
 ) {
     companion object {
         private fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }

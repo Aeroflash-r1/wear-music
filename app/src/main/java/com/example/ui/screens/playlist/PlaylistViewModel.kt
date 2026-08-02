@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.BackendResult
 import com.example.domain.model.PlaylistDetails
 import com.example.domain.model.Track
+import com.example.domain.model.userMessage
 import com.example.domain.repository.DownloadsRepository
 import com.example.domain.repository.LibraryRepository
 import com.example.domain.repository.PlaybackRepository
@@ -50,7 +51,7 @@ class PlaylistViewModel @Inject constructor(
                     _uiState.value = PlaylistUiState.Success(res.data, isFav)
                 }
                 is BackendResult.Error -> {
-                    _uiState.value = PlaylistUiState.Error(res.error.toString())
+                    _uiState.value = PlaylistUiState.Error(res.error.userMessage())
                 }
             }
         }
@@ -63,6 +64,15 @@ class PlaylistViewModel @Inject constructor(
             val isFav = libraryRepository.isFavorite(playlistId)
             _uiState.value = state.copy(isFavorite = isFav)
         }
+    }
+
+    fun playTrack(trackId: String) {
+        val state = _uiState.value as? PlaylistUiState.Success ?: return
+        val track = state.playlist.tracks.firstOrNull { it.id == trackId } ?: return
+        playbackRepository.playQueue(
+            listOf(Track(track.id, track.title, track.artist, track.duration)),
+            0
+        )
     }
 
     fun playPlaylist() {

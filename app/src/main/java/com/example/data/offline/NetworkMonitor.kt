@@ -28,7 +28,12 @@ class NetworkMonitor @Inject constructor(
             }
 
             override fun onLost(network: Network) {
-                trySend(NetworkState.DISCONNECTED)
+                // Another usable network may still be active. Recompute from the
+                // current active network instead of reporting a false disconnect.
+                val active = connectivityManager.activeNetwork?.let {
+                    connectivityManager.getNetworkCapabilities(it)
+                }
+                trySend(getNetworkStateFromCapabilities(active))
             }
 
             override fun onCapabilitiesChanged(

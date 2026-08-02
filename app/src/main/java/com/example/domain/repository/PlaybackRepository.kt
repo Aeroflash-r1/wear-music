@@ -14,7 +14,7 @@ interface PlaybackRepository {
     fun toggleShuffle()
     fun toggleRepeat()
     fun stop()
-    suspend fun playTrackStream(trackId: String, title: String, artist: String)
+    suspend fun playTrackStream(trackId: String, title: String, artist: String, streamUrl: String? = null)
     fun setPlaybackSpeed(speed: Float)
     fun setSleepTimer(minutes: Int)
     fun cancelSleepTimer()

@@ -19,6 +19,7 @@ import com.example.data.database.dao.QueueDao
 import com.example.data.database.dao.TrackDao
 import com.example.data.database.entity.HistoryEntity
 import com.example.data.database.entity.QueueEntity
+import com.example.data.database.entity.TrackEntity
 import com.example.domain.model.BackendResult
 import com.example.domain.model.PlayerUiState
 import com.example.domain.model.Track
@@ -34,6 +35,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +53,8 @@ class PulsePlayerManager @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.Main)
     private var positionUpdateJob: Job? = null
     private var sleepTimerJob: Job? = null
+    private var currentPlaybackJob: Job? = null
+    private var playbackRequestId = 0L
 
     private val currentQueue = mutableListOf<Track>()
     private var currentQueueIndex = 0
@@ -66,10 +71,17 @@ class PulsePlayerManager @Inject constructor(
     private fun ensureServiceStarted() {
         if (serviceStarted) return
         serviceStarted = true
-        ContextCompat.startForegroundService(
-            context,
-            Intent(context, PulsePlaybackService::class.java)
-        )
+        runCatching {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, PulsePlaybackService::class.java)
+            )
+        }.onFailure {
+            // Playback initiated while the app is backgrounded may not be allowed
+            // to start a foreground service. Keep the player usable and retry on the
+            // next user-initiated action rather than crashing the app.
+            serviceStarted = false
+        }
     }
 
     /** Called by PulsePlaybackService.onDestroy() so we know to restart it next time. */
@@ -115,11 +127,16 @@ class PulsePlayerManager @Inject constructor(
     )
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
+    init {
+        restorePersistedQueue()
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _uiState.value = _uiState.value.copy(isPlaying = isPlaying)
             if (isPlaying) {
                 startPositionUpdates()
+                recordHistory(_uiState.value.currentTrackId)
             } else {
                 stopPositionUpdates()
             }
@@ -132,9 +149,6 @@ class PulsePlayerManager @Inject constructor(
                 buffering = isBuffering,
                 duration = duration
             )
-            if (playbackState == Player.STATE_ENDED) {
-                recordHistoryCurrentTrack()
-            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -147,12 +161,11 @@ class PulsePlayerManager @Inject constructor(
                     currentPosition = 0L,
                     currentTrackId = trackId
                 )
-                recordHistory(trackId)
             }
         }
     }
 
-    fun playStream(streamUrl: String, title: String, artist: String) {
+    fun playStream(trackId: String, streamUrl: String, title: String, artist: String) {
         ensureServiceStarted()
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
@@ -160,7 +173,7 @@ class PulsePlayerManager @Inject constructor(
             .build()
 
         val item = MediaItem.Builder()
-            .setMediaId(title)
+            .setMediaId(trackId)
             .setUri(streamUrl)
             .setMediaMetadata(metadata)
             .build()
@@ -168,6 +181,7 @@ class PulsePlayerManager @Inject constructor(
         _uiState.value = _uiState.value.copy(
             title = title,
             artist = artist,
+            currentTrackId = trackId,
             isPlaying = true,
             buffering = true,
             currentPosition = 0L
@@ -178,7 +192,6 @@ class PulsePlayerManager @Inject constructor(
         exoPlayer.playWhenReady = true
         exoPlayer.play()
 
-        recordHistory(title)
     }
 
     fun play() {
@@ -282,8 +295,10 @@ class PulsePlayerManager @Inject constructor(
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int = 0) {
+        currentPlaybackJob?.cancel()
         currentQueue.clear()
         currentQueue.addAll(tracks)
+        persistTracks(tracks)
         currentQueueIndex = startIndex.coerceIn(0, (tracks.size - 1).coerceAtLeast(0))
 
         _uiState.value = _uiState.value.copy(
@@ -301,12 +316,14 @@ class PulsePlayerManager @Inject constructor(
 
     fun addToQueue(track: Track) {
         currentQueue.add(track)
+        persistTracks(listOf(track))
         _uiState.value = _uiState.value.copy(queue = currentQueue.toList())
         persistQueue()
     }
 
     fun playNext(track: Track) {
         val insertIndex = (currentQueueIndex + 1).coerceAtMost(currentQueue.size)
+        persistTracks(listOf(track))
         currentQueue.add(insertIndex, track)
         _uiState.value = _uiState.value.copy(queue = currentQueue.toList())
         persistQueue()
@@ -315,7 +332,9 @@ class PulsePlayerManager @Inject constructor(
     fun removeFromQueue(index: Int) {
         if (index in currentQueue.indices) {
             currentQueue.removeAt(index)
-            if (currentQueueIndex >= currentQueue.size) {
+            if (index < currentQueueIndex) {
+                currentQueueIndex--
+            } else if (currentQueueIndex >= currentQueue.size) {
                 currentQueueIndex = (currentQueue.size - 1).coerceAtLeast(0)
             }
             _uiState.value = _uiState.value.copy(
@@ -352,11 +371,14 @@ class PulsePlayerManager @Inject constructor(
     }
 
     private fun playTrackFromQueue(track: Track) {
-        ensureServiceStarted()
+        currentPlaybackJob?.cancel()
+        val requestId = ++playbackRequestId
 
-        // Smart Resume calculation
+        // Resume only when the selected track is the same track that was previously
+        // active; never carry one track's position into another track.
+        val previousTrackId = _uiState.value.currentTrackId
         val totalDuration = _uiState.value.duration
-        val savedPos = _uiState.value.currentPosition
+        val savedPos = if (previousTrackId == track.id) _uiState.value.currentPosition else 0L
         val startPos = if (savedPos > 30000L && (totalDuration - savedPos) > 15000L) savedPos else 0L
 
         // Update UI immediately so the Player screen reflects the new track while we
@@ -371,18 +393,24 @@ class PulsePlayerManager @Inject constructor(
             currentPosition = startPos
         )
 
-        scope.launch {
+        currentPlaybackJob = scope.launch {
             val streamUrl = when (val result = backendRepository.getAudioStream(track.id)) {
                 is BackendResult.Success -> result.data.audioUrl
                 is BackendResult.Error -> null
             }
 
+            if (requestId != playbackRequestId || _uiState.value.currentTrackId != track.id) return@launch
             if (streamUrl == null) {
                 // Couldn't resolve a playable stream — stop buffering and bail out
                 // rather than silently pretending playback started.
                 _uiState.value = _uiState.value.copy(buffering = false, isPlaying = false)
                 return@launch
             }
+
+            // Start the media service only once there is an actual stream to play;
+            // starting it while a network lookup is still buffering can violate the
+            // Android foreground-service startup deadline.
+            ensureServiceStarted()
 
             val metadata = MediaMetadata.Builder()
                 .setTitle(track.title)
@@ -400,39 +428,74 @@ class PulsePlayerManager @Inject constructor(
             exoPlayer.playWhenReady = true
             exoPlayer.play()
 
-            recordHistory(track.id)
         }
-    }
-
-    private fun recordHistoryCurrentTrack() {
-        recordHistory(_uiState.value.currentTrackId)
     }
 
     private fun recordHistory(trackId: String) {
         if (trackId.isEmpty()) return
+        // ExoPlayer is main-thread confined. Capture its position before switching
+        // to IO for the Room write.
+        val position = exoPlayer.currentPosition.coerceAtLeast(0L)
         scope.launch(Dispatchers.IO) {
             try {
                 historyDao.insertHistory(
                     HistoryEntity(
+                        // Stable primary key makes history an MRU-style list rather
+                        // than one unbounded row per transition event.
                         id = trackId,
                         trackId = trackId,
                         playedAt = System.currentTimeMillis(),
-                        lastPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+                        lastPositionMs = position
                     )
                 )
+                historyDao.trimHistory()
             } catch (_: Exception) {}
         }
     }
 
+    private fun persistTracks(tracks: List<Track>) {
+        val entities = tracks.distinctBy { it.id }.map { track ->
+            TrackEntity(
+                id = track.id,
+                title = track.title,
+                artist = track.artist,
+                album = "",
+                duration = track.duration,
+                audioQuality = "Unknown"
+            )
+        }
+        scope.launch(Dispatchers.IO) {
+            runCatching { trackDao.insertTracks(entities) }
+        }
+    }
+
     private fun persistQueue() {
+        val snapshot = currentQueue.toList()
         scope.launch(Dispatchers.IO) {
             try {
                 queueDao.clearQueue()
-                val entities = currentQueue.mapIndexed { idx, track ->
+                val entities = snapshot.mapIndexed { idx, track ->
                     QueueEntity(id = "${track.id}_$idx", trackId = track.id, position = idx)
                 }
                 queueDao.insertQueueItems(entities)
             } catch (_: Exception) {}
+        }
+    }
+
+    private fun restorePersistedQueue() {
+        scope.launch {
+            val persisted = withContext(Dispatchers.IO) {
+                val tracks = trackDao.getAllTracks().first().associateBy { it.id }
+                queueDao.getQueue().first().mapNotNull { item ->
+                    tracks[item.trackId]?.let { track ->
+                        Track(track.id, track.title, track.artist, track.duration)
+                    }
+                }
+            }
+            if (currentQueue.isEmpty() && persisted.isNotEmpty()) {
+                currentQueue.addAll(persisted)
+                _uiState.value = _uiState.value.copy(queue = persisted)
+            }
         }
     }
 
@@ -457,6 +520,7 @@ class PulsePlayerManager @Inject constructor(
     }
 
     fun release() {
+        currentPlaybackJob?.cancel()
         stopPositionUpdates()
         cancelSleepTimer()
         exoPlayer.removeListener(playerListener)

@@ -92,6 +92,19 @@ class LibraryRepositoryImplTest {
     }
 
     @Test
+    fun `toggleFavoriteTrack does not remove a different favorite type with the same id`() = runTest {
+        db.favoriteDao().insertFavorite(
+            FavoriteEntity(id = "album_same", trackId = "same", type = "album", title = "Album")
+        )
+
+        repository.toggleFavoriteTrack(Track("same", "Song", "Artist", "3:45"))
+        repository.toggleFavoriteTrack(Track("same", "Song", "Artist", "3:45"))
+
+        assertNotNull(db.favoriteDao().getFavorite("same", "album"))
+        assertFalse(db.favoriteDao().getFavorite("same", "song") != null)
+    }
+
+    @Test
     fun `toggleFavoriteTrack removes when already favorited`() = runTest {
         repository.toggleFavoriteTrack(Track("t1", "Song", "Artist", "3:45"))
         assertTrue(repository.isFavorite("t1"))

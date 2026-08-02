@@ -41,6 +41,16 @@ class TtlCacheTest {
     }
 
     @Test
+    fun `cache expiry is safe for concurrent reads`() {
+        val cache = TtlCache<String, Int>(-1L)
+        cache.put("gone", 1)
+        repeat(20) {
+            assertNull(cache.get("gone"))
+        }
+        assertEquals(0, cache.size())
+    }
+
+    @Test
     fun `evictExpired removes only expired entries`() {
         val cache = TtlCache<String, Int>(10_000L)
         cache.put("fresh", 1)

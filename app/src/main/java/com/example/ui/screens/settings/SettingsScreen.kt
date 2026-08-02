@@ -85,6 +85,7 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncUiState.collectAsState()
     val connectionTest by viewModel.connectionTest.collectAsState()
+    val forceOfflineMode by viewModel.forceOfflineMode.collectAsState()
     val listState = rememberScalingLazyListState()
 
     var editingServerUrl by remember { mutableStateOf(false) }
@@ -150,7 +151,7 @@ fun SettingsScreen(
             item {
                 PulseToggleItem(
                     label = "Force Offline Mode",
-                    checked = syncState.isOffline,
+                    checked = forceOfflineMode,
                     onCheckedChange = { viewModel.toggleForceOfflineMode(it) },
                     icon = Icons.Default.NetworkCheck
                 )

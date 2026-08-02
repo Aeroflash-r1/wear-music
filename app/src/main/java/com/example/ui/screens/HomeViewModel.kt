@@ -77,10 +77,9 @@ class HomeViewModel @Inject constructor(
                 val tr = recommendationRepository.getTrending()
                 if (tr is BackendResult.Success) {
                     _homeFeed.value = _homeFeed.value.copy(trending = tr.data)
-                    // Seed "Popular Albums"/"Popular Artists" from a real artist name in
-                    // the actual trending results — Piped/Invidious don't expose a
-                    // dedicated "popular albums/artists" browse endpoint, so this is the
-                    // most honest real-data stand-in (as opposed to fabricating entries).
+                    // Seed browse sections from a real artist name in the trending
+                    // results because the self-hosted server exposes search filters
+                    // rather than separate popularity endpoints.
                     val seedArtist = tr.data.firstOrNull { it.artist.isNotBlank() }?.artist
                     if (seedArtist != null) {
                         loadPopularAlbumsAndArtists(seedArtist)

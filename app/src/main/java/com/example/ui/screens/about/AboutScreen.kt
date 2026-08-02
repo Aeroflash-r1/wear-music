@@ -12,9 +12,7 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.MaterialTheme
@@ -22,6 +20,7 @@ import androidx.wear.compose.material3.Text
 import com.example.ui.components.PulseListItem
 import com.example.ui.components.PulseScreenScaffold
 import com.example.ui.components.PulseSectionHeader
+import com.example.ui.components.pulseRotaryScroll
 
 @Composable
 fun AboutScreen(
@@ -33,7 +32,7 @@ fun AboutScreen(
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         ScalingLazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp).pulseRotaryScroll(listState)
         ) {
             item { PulseSectionHeader("About Pulse") }
 
@@ -75,8 +74,8 @@ fun AboutScreen(
 
             item {
                 PulseListItem(
-                    label = "Network Failover",
-                    secondaryLabel = "Piped & Invidious Engine",
+                    label = "Backend",
+                    secondaryLabel = "Self-hosted Ktor + yt-dlp server",
                     icon = Icons.Default.Info,
                     onClick = { }
                 )

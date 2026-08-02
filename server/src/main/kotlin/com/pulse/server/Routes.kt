@@ -23,7 +23,8 @@ fun Application.configureJson() {
 fun Application.configureErrors() {
     install(StatusPages) {
         exception<Throwable> { call, cause ->
-            call.respond(HttpStatusCode.InternalServerError, ApiError(cause.message ?: "Internal error"))
+            call.application.environment.log.error("Unhandled request failure", cause)
+            call.respond(HttpStatusCode.InternalServerError, ApiError("Internal server error"))
         }
     }
 }
@@ -43,15 +44,31 @@ fun Application.configureRoutes(client: YtDlpClient) {
             if (q.isNullOrBlank()) {
                 return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing query parameter 'q'"))
             }
+            if (q.length > 200) {
+                return@get call.respond(HttpStatusCode.BadRequest, ApiError("Query is too long"))
+            }
             val filter = call.request.queryParameters["filter"]
+            if (filter != null && filter !in setOf("music_songs", "music_albums", "channels")) {
+                return@get call.respond(HttpStatusCode.BadRequest, ApiError("Unsupported search filter"))
+            }
             val items = client.search(q, filter)
-            // 200 + empty list (not 404) so the app can show "No results" instead of
-            // treating a legitimately-empty search as a backend failure.
-            call.respond(mapOf("items" to items))
+            if (items == null) {
+                // yt-dlp failed (missing binary, timeout, non-zero exit) — tell the
+                // app it's a server-side failure, not "no results".
+                call.respond(
+                    HttpStatusCode.BadGateway,
+                    ApiError("yt-dlp failed to search. Check the server logs (yt-dlp installed? YouTube reachable?)")
+                )
+            } else {
+                // 200 + empty list (not 404) so the app can show "No results" for a
+                // legitimately-empty search without treating it as a backend failure.
+                call.respond(mapOf("items" to items))
+            }
         }
 
         get("/api/streams/{id}") {
-            val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
+            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
             val stream = client.getAudioStream(id)
             if (stream == null) {
                 call.respond(HttpStatusCode.NotFound, ApiError("Could not resolve audio stream for $id"))
@@ -61,7 +78,8 @@ fun Application.configureRoutes(client: YtDlpClient) {
         }
 
         get("/api/track/{id}") {
-            val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
+            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
             val track = client.getTrack(id)
             if (track == null) {
                 call.respond(HttpStatusCode.NotFound, ApiError("Could not resolve track $id"))
@@ -71,7 +89,8 @@ fun Application.configureRoutes(client: YtDlpClient) {
         }
 
         get("/api/playlist/{id}") {
-            val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
+            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
             val playlist = client.getPlaylist(id)
             if (playlist == null) {
                 call.respond(HttpStatusCode.NotFound, ApiError("Could not resolve playlist $id"))
@@ -81,7 +100,8 @@ fun Application.configureRoutes(client: YtDlpClient) {
         }
 
         get("/api/channel/{id}") {
-            val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
+            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ApiError("Missing id"))
             val artist = client.getArtist(id)
             if (artist == null) {
                 call.respond(HttpStatusCode.NotFound, ApiError("Could not resolve channel $id"))
@@ -92,7 +112,14 @@ fun Application.configureRoutes(client: YtDlpClient) {
 
         get("/api/trending") {
             val items = client.getTrending()
-            call.respond(mapOf("items" to items))
+            if (items == null) {
+                call.respond(
+                    HttpStatusCode.BadGateway,
+                    ApiError("yt-dlp failed to fetch trending. Check the server logs.")
+                )
+            } else {
+                call.respond(mapOf("items" to items))
+            }
         }
     }
 }

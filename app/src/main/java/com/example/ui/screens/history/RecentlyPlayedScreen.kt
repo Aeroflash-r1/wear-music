@@ -24,8 +24,8 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.MaterialTheme
 import com.example.ui.components.PulseEmptyState
-import com.example.ui.components.PulseScreenScaffold
 import com.example.ui.components.PulseListItem
+import com.example.ui.components.PulseScreenScaffold
 import com.example.ui.components.PulseSecondaryButton
 import com.example.ui.components.PulseSectionHeader
 import com.example.ui.components.pulseRotaryScroll
@@ -41,46 +41,45 @@ fun RecentlyPlayedScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberScalingLazyListState()
     var selectedTrack by remember { mutableStateOf<Track?>(null) }
-    
+
     PulseScreenScaffold(scrollState = listState, modifier = modifier) {
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        ScalingLazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().pulseRotaryScroll(listState),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PulsePadding.ScreenContent,
-            verticalArrangement = Arrangement.spacedBy(PulseSpacing.sm)
-        ) {
-            item { PulseSectionHeader("Recently Played") }
-            if (uiState.history.isEmpty()) {
-                item {
-                    PulseEmptyState(
-                        message = "No listening history",
-                        icon = Icons.Default.History,
-                        modifier = Modifier.padding(top = PulseSpacing.lg)
-                    )
-                }
-            } else {
-                items(uiState.history, key = { it.id }) { track ->
-                    PulseListItem(
-                        label = track.title,
-                        secondaryLabel = "${track.artist} • ${track.duration}",
-                        icon = Icons.Default.History,
-                        onClick = { },
-                        onLongClick = { selectedTrack = track }
-                    )
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            ScalingLazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().pulseRotaryScroll(listState),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                contentPadding = PulsePadding.ScreenContent,
+                verticalArrangement = Arrangement.spacedBy(PulseSpacing.sm)
+            ) {
+                item { PulseSectionHeader("Recently Played") }
+                if (uiState.history.isEmpty()) {
+                    item {
+                        PulseEmptyState(
+                            message = "No listening history",
+                            icon = Icons.Default.History,
+                            modifier = Modifier.padding(top = PulseSpacing.lg)
+                        )
+                    }
+                } else {
+                    items(uiState.history, key = { it.id }) { track ->
+                        PulseListItem(
+                            label = track.title,
+                            secondaryLabel = "${track.artist} • ${track.duration}",
+                            icon = Icons.Default.History,
+                            onClick = { viewModel.play(track) },
+                            onLongClick = { selectedTrack = track }
+                        )
+                    }
                 }
             }
-        }
-        
-        if (selectedTrack != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
-                val dialogListState = rememberScalingLazyListState()
-                selectedTrack?.let { track ->
+
+            selectedTrack?.let { track ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    val dialogListState = rememberScalingLazyListState()
                     ScalingLazyColumn(
                         state = dialogListState,
                         modifier = Modifier.fillMaxSize().pulseRotaryScroll(dialogListState),
@@ -93,21 +92,30 @@ fun RecentlyPlayedScreen(
                             PulseListItem(
                                 label = "Play Again",
                                 icon = Icons.Default.PlayArrow,
-                                onClick = { selectedTrack = null }
+                                onClick = {
+                                    viewModel.play(track)
+                                    selectedTrack = null
+                                }
                             )
                         }
                         item {
                             PulseListItem(
                                 label = "Favorite",
                                 icon = Icons.Default.Favorite,
-                                onClick = { selectedTrack = null }
+                                onClick = {
+                                    viewModel.favorite(track)
+                                    selectedTrack = null
+                                }
                             )
                         }
                         item {
                             PulseListItem(
                                 label = "Download",
                                 icon = Icons.Default.Download,
-                                onClick = { selectedTrack = null }
+                                onClick = {
+                                    viewModel.download(track)
+                                    selectedTrack = null
+                                }
                             )
                         }
                         item {
@@ -120,6 +128,5 @@ fun RecentlyPlayedScreen(
                 }
             }
         }
-    }
     }
 }

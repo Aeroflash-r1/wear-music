@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.remote.MemoryCache
 import com.example.data.remote.api.PulseApi
+import com.example.data.remote.dto.PulseApiError
 import com.example.data.remote.dto.PulseArtist
 import com.example.data.remote.dto.PulsePlaylist
 import com.example.data.remote.dto.PulseSearchItem
@@ -16,6 +17,7 @@ import com.example.domain.model.PlaylistDetails
 import com.example.domain.model.SearchResultItem
 import com.example.domain.model.TrackDetails
 import com.example.domain.repository.BackendRepository
+import com.squareup.moshi.Moshi
 import retrofit2.Response
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -30,7 +32,8 @@ import javax.inject.Singleton
 @Singleton
 class BackendRepositoryImpl @Inject constructor(
     private val pulseApi: PulseApi,
-    private val memoryCache: MemoryCache
+    private val memoryCache: MemoryCache,
+    private val moshi: Moshi
 ) : BackendRepository {
 
     override suspend fun search(query: String, filter: String?, page: Int): BackendResult<List<SearchResultItem>> {
@@ -253,12 +256,24 @@ class BackendRepositoryImpl @Inject constructor(
         type = type ?: "song"
     )
 
-    private fun mapHttpError(resp: Response<*>): BackendError = when (resp.code()) {
-        401 -> BackendError.Unauthorized(resp.message() ?: "Unauthorized")
-        404 -> BackendError.Unknown("Not found (HTTP 404)")
-        429 -> BackendError.RateLimited(resp.message() ?: "Rate limited")
-        in 500..599 -> BackendError.BackendUnavailable(resp.message() ?: "Server error")
-        else -> BackendError.BackendUnavailable("HTTP ${resp.code()}: ${resp.message()}")
+    private fun mapHttpError(resp: Response<*>): BackendError {
+        // The server returns {"error": "..."} with actionable diagnostics (e.g.
+        // "yt-dlp failed to search") — surface that instead of the generic HTTP
+        // reason phrase so the user sees what actually went wrong.
+        val serverMessage = runCatching {
+            resp.errorBody()?.string()?.let { raw ->
+                moshi.adapter(PulseApiError::class.java).fromJson(raw)?.error
+            }
+        }.getOrNull()
+
+        return when (resp.code()) {
+            401 -> BackendError.Unauthorized(serverMessage ?: resp.message() ?: "Unauthorized")
+            404 -> BackendError.Unknown(serverMessage ?: "Not found (HTTP 404)")
+            429 -> BackendError.RateLimited(serverMessage ?: resp.message() ?: "Rate limited")
+            in 500..599 -> BackendError.BackendUnavailable(serverMessage ?: resp.message() ?: "Server error")
+            in 400..499 -> BackendError.Unknown(serverMessage ?: "Request failed (HTTP ${resp.code()})")
+            else -> BackendError.BackendUnavailable(serverMessage ?: "HTTP ${resp.code()}: ${resp.message()}")
+        }
     }
 
     private fun Throwable.toBackendError(): BackendError = when (this) {
@@ -267,5 +282,5 @@ class BackendRepositoryImpl @Inject constructor(
         else -> BackendError.Unknown(message ?: "Unknown error")
     }
 
-    private inline fun <T> call(block: () -> T): Result<T> = runCatching(block)
+    private suspend fun <T> call(block: suspend () -> T): Result<T> = runCatching { block() }
 }

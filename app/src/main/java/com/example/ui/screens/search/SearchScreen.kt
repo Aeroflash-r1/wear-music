@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
@@ -60,11 +62,54 @@ import com.example.ui.theme.PulsePadding
 import com.example.ui.theme.PulseRadius
 import com.example.ui.theme.PulseSpacing
 
+private val searchFilters = listOf("All", "Albums", "Artists")
+
 private fun iconForType(type: String) = when (type) {
     "album" -> Icons.Default.Album
     "artist" -> Icons.Default.Person
     "playlist" -> Icons.AutoMirrored.Filled.QueueMusic
     else -> Icons.Default.MusicNote
+}
+
+@Composable
+private fun SearchFilterChips(
+    selectedFilter: String,
+    onFilterSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(PulseSpacing.xs)
+    ) {
+        searchFilters.forEach { filter ->
+            val isSelected = filter == selectedFilter
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(PulseRadius.full))
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceContainer
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        RoundedCornerShape(PulseRadius.full)
+                    )
+                    .clickable { onFilterSelected(filter) }
+                    .padding(vertical = PulseSpacing.sm),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = filter,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -75,6 +120,7 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val query by viewModel.query.collectAsState()
+    val selectedFilter by viewModel.selectedFilter.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
     val listState = rememberScalingLazyListState()
     
@@ -105,7 +151,14 @@ fun SearchScreen(
                     onClear = viewModel::onClearQuery
                 )
             }
-            
+
+            item {
+                SearchFilterChips(
+                    selectedFilter = selectedFilter,
+                    onFilterSelected = viewModel::onFilterSelected
+                )
+            }
+
             when (val state = uiState) {
                 is SearchUiState.RecentSearches -> {
                     if (recentSearches.isNotEmpty()) {
@@ -131,9 +184,18 @@ fun SearchScreen(
                         )
                     }
                 }
+                is SearchUiState.Error -> {
+                    item {
+                        PulseEmptyState(
+                            message = state.message,
+                            icon = Icons.Default.Warning,
+                            modifier = Modifier.padding(top = PulseSpacing.lg)
+                        )
+                    }
+                }
                 is SearchUiState.Results -> {
                     item { PulseSectionHeader(title = "Results") }
-                    items(state.items, key = { it.id }) { result ->
+                    items(state.items, key = { "${it.type}:${it.id}" }) { result ->
                         PulseListItem(
                             label = result.title,
                             secondaryLabel = "${result.artist} • ${result.duration}",

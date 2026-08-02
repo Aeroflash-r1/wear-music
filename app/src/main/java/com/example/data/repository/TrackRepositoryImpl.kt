@@ -13,7 +13,6 @@ import com.example.domain.repository.BackendRepository
 import com.example.domain.repository.TrackRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.firstOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +30,7 @@ class TrackRepositoryImpl @Inject constructor(
         queueDao.getQueue(),
         trackDao.getAllTracks()
     ) { queueEntities, trackEntities ->
-        val trackMap = trackEntities.associateBy { it.id }
+        val        trackMap = trackEntities.associateBy { it.id }
         queueEntities.mapNotNull { q ->
             trackMap[q.trackId]?.let { t ->
                 Track(t.id, t.title, t.artist, t.duration)
@@ -69,13 +68,13 @@ class TrackRepositoryImpl @Inject constructor(
 
     override fun getRecentSearches(): Flow<List<String>> = recentSearchDao.getRecentSearches()
 
-    override suspend fun search(query: String): List<SearchResult> {
+    override suspend fun search(query: String, filter: String?): BackendResult<List<SearchResult>> {
         if (query.isNotBlank()) {
             recentSearchDao.insertSearch(RecentSearchEntity(query = query))
         }
 
-        return when (val res = backendRepository.search(query)) {
-            is BackendResult.Success -> res.data.map { item ->
+        return when (val res = backendRepository.search(query, filter)) {
+            is BackendResult.Success -> BackendResult.Success(res.data.map { item ->
                 SearchResult(
                     id = item.id,
                     title = item.title,
@@ -83,15 +82,11 @@ class TrackRepositoryImpl @Inject constructor(
                     duration = item.duration,
                     type = item.type
                 )
-            }
+            })
             is BackendResult.Error -> {
-                // Backend unreachable — fall back to whatever's genuinely in the
-                // local library rather than presenting fabricated results.
-                val allTracks = trackDao.getAllTracks().firstOrNull() ?: emptyList()
-                val lower = query.lowercase()
-                allTracks
-                    .map { SearchResult(it.id, it.title, it.artist, it.duration) }
-                    .filter { it.title.lowercase().contains(lower) || it.artist.lowercase().contains(lower) }
+                // Surface the real backend error so the UI can tell the user the
+                // server/yt-dlp failed instead of silently showing "No results".
+                res
             }
         }
     }

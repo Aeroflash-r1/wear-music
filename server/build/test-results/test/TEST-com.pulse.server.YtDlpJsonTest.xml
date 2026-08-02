@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.pulse.server.YtDlpJsonTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-01T18:56:54.995Z" hostname="codespaces-7feca9" time="0.108">
+<testsuite name="com.pulse.server.YtDlpJsonTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-02T02:52:28.951Z" hostname="codespaces-7feca9" time="0.093">
   <properties/>
-  <testcase name="tolerates missing fields and extra keys()" classname="com.pulse.server.YtDlpJsonTest" time="0.082"/>
-  <testcase name="parses single video json with audio stream fields()" classname="com.pulse.server.YtDlpJsonTest" time="0.002"/>
-  <testcase name="parses flat playlist json()" classname="com.pulse.server.YtDlpJsonTest" time="0.005"/>
+  <testcase name="tolerates missing fields and extra keys()" classname="com.pulse.server.YtDlpJsonTest" time="0.067"/>
+  <testcase name="parses single video json with audio stream fields()" classname="com.pulse.server.YtDlpJsonTest" time="0.001"/>
+  <testcase name="parses flat playlist json()" classname="com.pulse.server.YtDlpJsonTest" time="0.003"/>
   <testcase name="parses search line-delimited videos()" classname="com.pulse.server.YtDlpJsonTest" time="0.009"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

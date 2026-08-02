@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.DownloadProgressState
 import com.example.domain.model.DownloadedTrack
+import com.example.domain.model.Track
 import com.example.domain.repository.DownloadsRepository
+import com.example.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,12 +20,13 @@ data class DownloadsUiState(
     val progressList: List<DownloadProgressState> = emptyList(),
     val totalDownloads: Int = 0,
     val totalStorageUsed: String = "0 MB",
-    val storageLimit: String = "5 GB"
+    val storageLimit: String = "500 MB"
 )
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
-    private val downloadsRepository: DownloadsRepository
+    private val downloadsRepository: DownloadsRepository,
+    private val playbackRepository: PlaybackRepository
 ) : ViewModel() {
 
     val uiState: StateFlow<DownloadsUiState> = combine(
@@ -43,34 +46,34 @@ class DownloadsViewModel @Inject constructor(
         initialValue = DownloadsUiState()
     )
 
-    fun pauseDownload(trackId: String) {
+    fun play(track: DownloadedTrack) {
         viewModelScope.launch {
-            downloadsRepository.pauseDownload(trackId)
+            playbackRepository.playTrackStream(
+                trackId = track.id,
+                title = track.title,
+                artist = track.artist,
+                streamUrl = track.streamUrl
+            )
         }
+    }
+
+    fun pauseDownload(trackId: String) {
+        viewModelScope.launch { downloadsRepository.pauseDownload(trackId) }
     }
 
     fun resumeDownload(trackId: String) {
-        viewModelScope.launch {
-            downloadsRepository.resumeDownload(trackId)
-        }
+        viewModelScope.launch { downloadsRepository.resumeDownload(trackId) }
     }
 
     fun cancelDownload(trackId: String) {
-        viewModelScope.launch {
-            downloadsRepository.cancelDownload(trackId)
-        }
+        viewModelScope.launch { downloadsRepository.cancelDownload(trackId) }
     }
 
     fun removeDownload(trackId: String) {
-        viewModelScope.launch {
-            downloadsRepository.removeDownload(trackId)
-        }
+        viewModelScope.launch { downloadsRepository.removeDownload(trackId) }
     }
 
     fun clearCache() {
-        viewModelScope.launch {
-            downloadsRepository.clearCache()
-        }
+        viewModelScope.launch { downloadsRepository.clearCache() }
     }
 }
-

@@ -100,7 +100,7 @@ fun HomeScreen(
         // Offline Banner
         if (isOffline) {
             item {
-                PulseCard(onClick = {}) {
+                PulseCard(onClick = { onNavigate(Screen.Settings) }) {
                     Text(
                         text = "OFFLINE MODE",
                         color = Color(0xFFFFB74D),

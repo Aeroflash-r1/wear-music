@@ -43,6 +43,9 @@ class SettingsViewModel @Inject constructor(
     val serverUrl: StateFlow<String> = settingsRepository.serverUrl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
+    val forceOfflineMode: StateFlow<Boolean> = offlineRepository.isForceOfflineMode()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _connectionTest = MutableStateFlow<String?>(null)
     val connectionTest: StateFlow<String?> = _connectionTest.asStateFlow()
 

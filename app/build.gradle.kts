@@ -1,4 +1,22 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Properties
+
+val localSigningProperties = Properties().apply {
+  val propertiesFile = rootProject.file("local-signing.properties")
+  if (propertiesFile.isFile) {
+    propertiesFile.inputStream().use(::load)
+  }
+}
+
+val releaseStoreFile = System.getenv("KEYSTORE_FILE")
+  ?: localSigningProperties.getProperty("storeFile")
+  ?: "pulse-release.keystore"
+val releaseStorePassword = System.getenv("KEYSTORE_PASSWORD")
+  ?: localSigningProperties.getProperty("storePassword")
+val releaseKeyAlias = System.getenv("KEY_ALIAS")
+  ?: localSigningProperties.getProperty("keyAlias")
+val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+  ?: localSigningProperties.getProperty("keyPassword")
 
 plugins {
   alias(libs.plugins.android.application)
@@ -26,16 +44,10 @@ android {
 
   signingConfigs {
     create("release") {
-      storeFile = file("pulse-release.keystore")
-      storePassword = System.getenv("KEYSTORE_PASSWORD")
-      keyAlias = System.getenv("KEY_ALIAS")
-      keyPassword = System.getenv("KEY_PASSWORD")
-    }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      storeFile = file(releaseStoreFile)
+      storePassword = releaseStorePassword
+      keyAlias = releaseKeyAlias
+      keyPassword = releaseKeyPassword
     }
   }
 
@@ -49,7 +61,8 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    // Use AGP's standard local debug keystore; no repository keystore is required.
+    debug { }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17

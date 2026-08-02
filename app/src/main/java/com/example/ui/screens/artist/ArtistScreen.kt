@@ -96,7 +96,7 @@ fun ArtistScreen(
                                 label = track.title,
                                 secondaryLabel = track.duration,
                                 icon = Icons.Default.MusicNote,
-                                onClick = viewModel::playAll
+                                onClick = { viewModel.playTrack(track.id) }
                             )
                         }
                     }

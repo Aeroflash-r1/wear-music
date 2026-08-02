@@ -3,6 +3,7 @@ package com.example.data.sync
 import com.example.data.remote.ServerConfig
 import com.example.domain.model.DownloadStatus
 import com.example.domain.model.NetworkState
+import com.example.domain.model.BackendResult
 import com.example.domain.model.SyncStatus
 import com.example.domain.model.SyncUiState
 import com.example.domain.repository.BackendRepository
@@ -85,8 +86,12 @@ class SyncRepositoryImpl @Inject constructor(
     override suspend fun performFullSync(): Boolean {
         _syncStatus.value = SyncStatus.SYNCING
         return try {
-            backendRepository.getTrending()
-            backendRepository.getRecommendations(null)
+            val trending = backendRepository.getTrending()
+            val recommendations = backendRepository.getRecommendations(null)
+            if (trending is BackendResult.Error || recommendations is BackendResult.Error) {
+                _syncStatus.value = SyncStatus.ERROR
+                return false
+            }
             _lastSyncTime.value = System.currentTimeMillis()
             _syncStatus.value = SyncStatus.SUCCESS
             true
@@ -113,7 +118,9 @@ class SyncRepositoryImpl @Inject constructor(
     }
 
     override fun setMaxConcurrentDownloads(count: Int) {
-        _maxConcurrentDownloads.value = count
+        val normalized = count.coerceIn(1, 3)
+        _maxConcurrentDownloads.value = normalized
+        downloadsRepository.setMaxParallelDownloads(normalized)
     }
 
     override fun setDownloadQueuePriority(priority: String) {

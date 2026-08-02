@@ -24,6 +24,7 @@ import com.example.data.database.entity.TrackEntity
         DownloadEntity::class,
         RecentSearchEntity::class
     ],
+    // History trimming changes runtime behavior only; no schema migration is needed.
     version = 3,
     exportSchema = false
 )

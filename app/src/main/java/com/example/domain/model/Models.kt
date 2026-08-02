@@ -13,7 +13,8 @@ data class DownloadedTrack(
     val artist: String,
     val duration: String,
     val quality: String,
-    val size: String
+    val size: String,
+    val streamUrl: String? = null
 )
 
 data class SearchResult(

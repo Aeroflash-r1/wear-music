@@ -123,9 +123,9 @@ class LibraryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun toggleFavoriteTrack(track: Track) {
-        val existing = favoriteDao.getFavoriteByTrackId(track.id)
+        val existing = favoriteDao.getFavorite(track.id, "song")
         if (existing != null) {
-            favoriteDao.deleteFavoriteByTrackId(track.id)
+            favoriteDao.deleteFavorite(track.id, "song")
         } else {
             favoriteDao.insertFavorite(
                 FavoriteEntity(
@@ -141,9 +141,9 @@ class LibraryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun toggleFavoriteAlbum(album: AlbumDetails) {
-        val existing = favoriteDao.getFavoriteByTrackId(album.id)
+        val existing = favoriteDao.getFavorite(album.id, "album")
         if (existing != null) {
-            favoriteDao.deleteFavoriteByTrackId(album.id)
+            favoriteDao.deleteFavorite(album.id, "album")
         } else {
             favoriteDao.insertFavorite(
                 FavoriteEntity(
@@ -159,9 +159,9 @@ class LibraryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun toggleFavoriteArtist(artist: ArtistDetails) {
-        val existing = favoriteDao.getFavoriteByTrackId(artist.id)
+        val existing = favoriteDao.getFavorite(artist.id, "artist")
         if (existing != null) {
-            favoriteDao.deleteFavoriteByTrackId(artist.id)
+            favoriteDao.deleteFavorite(artist.id, "artist")
         } else {
             favoriteDao.insertFavorite(
                 FavoriteEntity(
@@ -176,9 +176,9 @@ class LibraryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun toggleFavoritePlaylist(playlist: PlaylistDetails) {
-        val existing = favoriteDao.getFavoriteByTrackId(playlist.id)
+        val existing = favoriteDao.getFavorite(playlist.id, "playlist")
         if (existing != null) {
-            favoriteDao.deleteFavoriteByTrackId(playlist.id)
+            favoriteDao.deleteFavorite(playlist.id, "playlist")
         } else {
             favoriteDao.insertFavorite(
                 FavoriteEntity(

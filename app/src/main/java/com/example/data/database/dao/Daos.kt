@@ -52,6 +52,9 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorites WHERE trackId = :trackId LIMIT 1")
     suspend fun getFavoriteByTrackId(trackId: String): FavoriteEntity?
 
+    @Query("SELECT * FROM favorites WHERE trackId = :trackId AND type = :type LIMIT 1")
+    suspend fun getFavorite(trackId: String, type: String): FavoriteEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavorite(favorite: FavoriteEntity)
 
@@ -61,13 +64,16 @@ interface FavoriteDao {
     @Query("DELETE FROM favorites WHERE trackId = :trackId")
     suspend fun deleteFavoriteByTrackId(trackId: String)
 
+    @Query("DELETE FROM favorites WHERE trackId = :trackId AND type = :type")
+    suspend fun deleteFavorite(trackId: String, type: String)
+
     @Query("DELETE FROM favorites")
     suspend fun clearFavorites()
 }
 
 @Dao
 interface HistoryDao {
-    @Query("SELECT * FROM history ORDER BY playedAt DESC")
+    @Query("SELECT * FROM history ORDER BY playedAt DESC LIMIT 100")
     fun getHistory(): Flow<List<HistoryEntity>>
 
     @Query("SELECT * FROM history WHERE id = :id LIMIT 1")
@@ -75,6 +81,9 @@ interface HistoryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistory(history: HistoryEntity)
+
+    @Query("DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY playedAt DESC LIMIT :limit)")
+    suspend fun trimHistory(limit: Int = 100)
 
     @Delete
     suspend fun deleteHistory(history: HistoryEntity)

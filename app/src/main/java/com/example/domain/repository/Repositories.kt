@@ -1,5 +1,6 @@
 package com.example.domain.repository
 
+import com.example.domain.model.BackendResult
 import com.example.domain.model.DownloadedTrack
 import com.example.domain.model.SearchResult
 import com.example.domain.model.SettingsUiState
@@ -11,7 +12,7 @@ interface TrackRepository {
     fun getFavorites(): Flow<List<Track>>
     fun getRecentlyPlayed(): Flow<List<Track>>
     fun getRecentSearches(): Flow<List<String>>
-    suspend fun search(query: String): List<SearchResult>
+    suspend fun search(query: String, filter: String? = null): BackendResult<List<SearchResult>>
 }
 
 interface DownloadsRepository {

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.ArtistDetails
 import com.example.domain.model.BackendResult
 import com.example.domain.model.Track
+import com.example.domain.model.userMessage
 import com.example.domain.repository.ArtistRepository
 import com.example.domain.repository.LibraryRepository
 import com.example.domain.repository.PlaybackRepository
@@ -48,7 +49,7 @@ class ArtistViewModel @Inject constructor(
                     _uiState.value = ArtistUiState.Success(res.data, isFav)
                 }
                 is BackendResult.Error -> {
-                    _uiState.value = ArtistUiState.Error(res.error.toString())
+                    _uiState.value = ArtistUiState.Error(res.error.userMessage())
                 }
             }
         }
@@ -61,6 +62,15 @@ class ArtistViewModel @Inject constructor(
             val isFav = libraryRepository.isFavorite(artistId)
             _uiState.value = state.copy(isFavorite = isFav)
         }
+    }
+
+    fun playTrack(trackId: String) {
+        val state = _uiState.value as? ArtistUiState.Success ?: return
+        val track = state.artist.topTracks.firstOrNull { it.id == trackId } ?: return
+        playbackRepository.playQueue(
+            listOf(Track(track.id, track.title, state.artist.name, track.duration)),
+            0
+        )
     }
 
     fun playAll() {

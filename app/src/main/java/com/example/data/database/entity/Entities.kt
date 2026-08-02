@@ -28,6 +28,7 @@ data class FavoriteEntity(
 
 @Entity(tableName = "history")
 data class HistoryEntity(
+    /** One row per track; replaying a track refreshes its recency instead of growing forever. */
     @PrimaryKey val id: String,
     val trackId: String,
     val playedAt: Long = System.currentTimeMillis(),

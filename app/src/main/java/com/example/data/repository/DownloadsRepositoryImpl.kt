@@ -83,18 +83,17 @@ class DownloadsRepositoryImpl @Inject constructor(
                 id = dl.id,
                 title = track?.title ?: "Track #${dl.trackId}",
                 artist = track?.artist ?: "Unknown Artist",
-                duration = track?.duration ?: "3:45",
+                duration = track?.duration ?: "0:00",
                 quality = track?.audioQuality ?: "High Quality",
-                size = dl.fileSize
+                size = dl.fileSize,
+                streamUrl = dl.filePath
             )
         }
     }
 
     override fun observeDownloadProgress(): Flow<List<DownloadProgressState>> = _progressState.asStateFlow()
 
-    override fun getTotalDownloads(): Int {
-        return simpleCache.keys.size.coerceAtLeast(downloadManager.currentDownloads.size)
-    }
+    override fun getTotalDownloads(): Int = downloadManager.currentDownloads.size
 
     override fun getTotalStorageUsed(): String {
         val bytes = simpleCache.cacheSpace
@@ -109,18 +108,16 @@ class DownloadsRepositoryImpl @Inject constructor(
             is BackendResult.Success -> {
                 val uri = Uri.parse(streamRes.data.audioUrl)
                 val request = DownloadRequest.Builder(trackId, uri)
-                    .setCustomCacheKey(trackId)
+                    // Keep Media3's default URI cache key so playback of the
+                    // persisted stream URL can reuse this downloaded resource.
                     .setMimeType(streamRes.data.mimeType)
                     .setData(title.toByteArray(Charsets.UTF_8))
                     .build()
 
-                DownloadService.sendAddDownload(
-                    context,
-                    PulseDownloadService::class.java,
-                    request,
-                    false
-                )
-
+                // Resolve metadata before notifying the service so the UI never
+                // observes a download with missing library metadata.
+                // Metadata resolution is best-effort; the requested title/artist are
+                // retained when the details endpoint is unavailable.
                 // Resolve real metadata (title/artist/album/duration) so the library
                 // entry reflects the actual track instead of placeholder values, and
                 // estimate the file size from the stream bitrate and duration.
@@ -155,9 +152,17 @@ class DownloadsRepositoryImpl @Inject constructor(
                         fileSize = fileSize
                     )
                 )
+
+                DownloadService.sendAddDownload(
+                    context,
+                    PulseDownloadService::class.java,
+                    request,
+                    false
+                )
             }
             is BackendResult.Error -> {
-                // Fallback direct download enqueue
+                // Keep the repository side-effect free when stream resolution fails;
+                // callers observe the backend error through their own operation state.
             }
         }
     }

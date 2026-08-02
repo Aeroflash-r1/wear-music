@@ -62,3 +62,9 @@ data class PulseHealth(
     @Json(name = "ytDlpVersion") val ytDlpVersion: String? = null,
     @Json(name = "cache") val cache: String? = null
 )
+
+/** Mirrors the server's ApiError: `{"error": "..."}`. */
+@JsonClass(generateAdapter = true)
+data class PulseApiError(
+    @Json(name = "error") val error: String? = null
+)

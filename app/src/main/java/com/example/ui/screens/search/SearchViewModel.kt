@@ -2,8 +2,10 @@ package com.example.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.domain.model.BackendResult
 import com.example.domain.model.SearchResult
 import com.example.domain.model.Track
+import com.example.domain.model.userMessage
 import com.example.domain.repository.BackendRepository
 import com.example.domain.repository.DownloadsRepository
 import com.example.domain.repository.LibraryRepository
@@ -28,6 +30,7 @@ sealed interface SearchUiState {
         val selectedFilter: String = "All"
     ) : SearchUiState
     object NoResults : SearchUiState
+    data class Error(val message: String) : SearchUiState
 }
 
 @HiltViewModel
@@ -84,11 +87,28 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun performSearch(query: String, filter: String) {
         _uiState.value = SearchUiState.Loading
-        val results = trackRepository.search(query)
-        if (results.isEmpty()) {
-            _uiState.value = SearchUiState.NoResults
-        } else {
-            _uiState.value = SearchUiState.Results(results, filter)
+        // Translate the UI chip label into the backend filter code; the server
+        // only understands null / music_albums / channels.
+        val backendFilter = when (filter) {
+            "Albums" -> "music_albums"
+            "Artists" -> "channels"
+            else -> null
+        }
+        when (val result = trackRepository.search(query, backendFilter)) {
+            is BackendResult.Success -> {
+                // YouTube search often returns the same video twice, and flat
+                // entries can have empty ids — dedupe so the list's item keys stay
+                // unique (duplicate keys crash ScalingLazyColumn).
+                val items = result.data.distinctBy { "${it.type}:${it.id}" }
+                if (items.isEmpty()) {
+                    _uiState.value = SearchUiState.NoResults
+                } else {
+                    _uiState.value = SearchUiState.Results(items, filter)
+                }
+            }
+            is BackendResult.Error -> {
+                _uiState.value = SearchUiState.Error(result.error.userMessage())
+            }
         }
     }
 

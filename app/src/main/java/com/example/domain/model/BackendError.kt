@@ -21,3 +21,14 @@ sealed class BackendResult<out T> {
 
     fun isSuccess(): Boolean = this is Success
 }
+
+/** Human-readable message for surfacing backend failures in the UI. */
+fun BackendError.userMessage(): String = when (this) {
+    is BackendError.Network -> message
+    is BackendError.Timeout -> message
+    is BackendError.Parsing -> message
+    is BackendError.Unauthorized -> message
+    is BackendError.BackendUnavailable -> message
+    is BackendError.RateLimited -> message
+    is BackendError.Unknown -> message
+}
